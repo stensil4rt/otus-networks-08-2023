@@ -76,8 +76,46 @@ switchport trunk allowed vlan 3,10,11
 При проверке пинги между хостами одного vlan'а проходят (R1-1 <-> R1-2 или R2-1 <-> R2-2), но отсутствуют между хостами разных vlan'ов.
 
 ### 5. Настроить L3 коммутатор и trunk-подключение к коммутатору L2.
-
+####  Пример настройки на коммутаторе R1:
+```
+configure terminal
+interface e0/3
+switchport trunk encapsulation dot1q
+switchport mode trunk
+switchport trunk allowed vlan 3,10,11
+```
 
 ### 6. Настроить интерфейсы management-влана на коммутаторах. Проверить связность.
+####  Настройка коммутатора R1:
+```
+configure terminal
+interface Ethernet0/0.3
+no shutdown
+description vlan3 gateway
+encapsulation dot1Q 3
+ip address 192.168.3.1 255.255.255.0
+exit
+configure terminal
+interface Ethernet0/0
+no shutdown
+```
+
+На коммутаторах S1 и S2 настройка аналогочна, но используется interface vlan3.
 
 ### 7. Реализовать маршрутизацию на L3-коммутаторе по схеме роктер-на-палочке.
+####  Настройка коммутатора R1:
+```
+configure terminal
+interface Ethernet0/0.10
+no shutdown
+description vlan10 gateway
+encapsulation dot1Q 10
+ip address 192.168.10.1 255.255.255.0
+end
+interface Ethernet0/0.11
+no shutdown
+description vlan11 gateway
+encapsulation dot1Q 11
+ip address 192.168.11.1 255.255.255.0
+```
+После данной настройки работают пинги между устройствами VLAN10 и VLAN11.
