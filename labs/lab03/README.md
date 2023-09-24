@@ -6,7 +6,7 @@
  3. Конфигурирование и проверка DHCPv4 сервера на R2.
 
 
-### 1 Создание сети и настройка основных параметров устройства.
+### 1 Создание сети и настройка основных параметров устройств.
 
 #### 1.1 Таблица адресации.
 
@@ -14,13 +14,15 @@
  | ------------- | ------------- | ------------- | --------------- | --------------- |
  | R1            | e0/0          | 10.0.0.1      | 255.255.255.252 | N/A             |
  |               | e0/1          | N/A           | N/A             |                 |
- |               | e0/1.100      |               |                 |                 |
- |               | e0/1.200      |               |                 |                 |
- |               | e0/1.1000     |               |                 |                 |
- | S1            | VLAN 200      |               |                 |                 |
- | S2            | VLAN 1        |               |                 |                 |
- | PC-A          | e0            | DHCP          | DHCP            | DHCP            |
- | PC-B          | e0            | DHCP          | DHCP            | DHCP            |
+ |               | e0/1.100      | 192.168.10.1  | 255.255.255.0   |                 |
+ |               | e0/1.200      | 192.168.11.1  | 255.255.255.0   |                 |
+ |               | e0/1.1000     | N/A           |                 |                 |
+ | R2            | e0/0          | 10.0.0.2      | 255.255.255.252 | N/A             |
+ |               | e0/1          | 192.168.1.1   | 255.255.255.0   |                 |
+ | S1            | VLAN 200      | 192.168.11.2  |                 |                 |
+ | S2            | VLAN 1        | 192.168.1.2   |                 |                 |
+ | PC1           | e0            | DHCP          | DHCP            | DHCP            |
+ | PC2           | e0            | DHCP          | DHCP            | DHCP            |
 
 
 #### 1.2 Таблица VLAN.
@@ -88,131 +90,314 @@
  S1#clock set 19:45:55 sep 20 2023
  ```
 
-#### 1.3 Проверка связи коммуторов.
-
- - a. Проверка пингом с S1 на S2:
+#### 1.5 Настройка межвлановой маршрутизации на R1.
+ - a. Активация интерфейса e0/1
  ```
-  S1#ping 192.168.1.2
+ R1(config)#interface e0/1
+ R1(config-if)#no shutdown
+ ```
+ - b. Настройка субинтерфейсов vlan и назначение им ip-адресов согласно плану.  
+```
+R1(config)#interface e0/1.100
+R1(config-subif)#description vlan100 gw
+R1(config-subif)#encapsulation dot1Q 100
+R1(config-subif)#ip address 192.168.10.1 255.255.255.0
+R1(config-subif)#no shutdown
+R1(config-subif)#exit
+R1(config)#interface e0/1.200
+R1(config-subif)#description vlan200 gw
+R1(config-subif)#encapsulation dot1Q 200
+R1(config-subif)#ip address 192.168.11.1 255.255.255.0
+R1(config-subif)#no shutdown
+R1(config-subif)#exit
+R1(config)#interface e0/1.1000
+R1(config-subif)#description native vlan1000 nogw
+R1(config-subif)#encapsulation dot1Q 1000 native
+R1(config-subif)#no shutdown
+R1(config-subif)#exit
+```
+ - c. Проверка настроенных интерфейсов.
+```
+#show ip interface brief
+Interface                  IP-Address      OK? Method Status                Protocol
+Ethernet0/0                unassigned      YES NVRAM  up                    up      
+Ethernet0/1                unassigned      YES NVRAM  up                    up      
+Ethernet0/1.100            192.168.10.1    YES manual up                    up      
+Ethernet0/1.200            192.168.11.1    YES manual up                    up      
+Ethernet0/1.1000           unassigned      YES unset  up                    up      
+Ethernet0/2                unassigned      YES NVRAM  administratively down down    
+Ethernet0/3                unassigned      YES NVRAM  administratively down down
+
+R1#show interfaces         
+Ethernet0/0 is up, line protocol is up
+...
+Ethernet0/1 is up, line protocol is up
+  Hardware is AmdP2, address is aabb.cc00.3010 (bia aabb.cc00.3010)
+  MTU 1500 bytes, BW 10000 Kbit/sec, DLY 1000 usec,
+     reliability 255/255, txload 1/255, rxload 1/255
+  Encapsulation 802.1Q Virtual LAN, Vlan ID  1., loopback not set
+...
+Ethernet0/1.100 is up, line protocol is up
+  Hardware is AmdP2, address is aabb.cc00.3010 (bia aabb.cc00.3010)
+  Description: vlan100 gw
+  Internet address is 192.168.10.1/24
+  MTU 1500 bytes, BW 10000 Kbit/sec, DLY 1000 usec,
+     reliability 255/255, txload 1/255, rxload 1/255
+  Encapsulation 802.1Q Virtual LAN, Vlan ID  100.
+...
+Ethernet0/1.200 is up, line protocol is up
+  Hardware is AmdP2, address is aabb.cc00.3010 (bia aabb.cc00.3010)
+  Description: vlan200 gw
+  Internet address is 192.168.11.1/24
+  MTU 1500 bytes, BW 10000 Kbit/sec, DLY 1000 usec,
+     reliability 255/255, txload 1/255, rxload 1/255
+  Encapsulation 802.1Q Virtual LAN, Vlan ID  200.
+...
+Ethernet0/1.1000 is up, line protocol is up
+  Hardware is AmdP2, address is aabb.cc00.3010 (bia aabb.cc00.3010)
+  Description: native v1000 nogw
+  MTU 1500 bytes, BW 10000 Kbit/sec, DLY 1000 usec,
+     reliability 255/255, txload 1/255, rxload 1/255
+  Encapsulation 802.1Q Virtual LAN, Vlan ID  1000.
+```
+
+#### 1.6 Настройка интерфейсов и статической маршрутизации на R2.
+ - a. Настройкаа ip-адреса на интерфейсе e0/1.
+ ```
+R2(config-if)#no shutdown
+Sep 24 10:14:24.285: %LINK-3-UPDOWN: Interface Ethernet0/1, changed state to up
+Sep 24 10:14:25.291: %LINEPROTO-5-UPDOWN: Line protocol on Interface Ethernet0/1, changed state to up
+R2(config-if)#ip address 192.168.1.1 255.255.255.0
+ ```
+ - b. Настройка e0/0 для каждого роутера согласно плана.
+ ```
+ R1(config)#interface e0/0
+ R1(config-if)#no shutdown
+ R1(config-if)#ip address 10.0.0.1 255.255.255.252
+ R1(config-if)#end
+
+ R2(config)#interface e0/0
+ R2(config-if)#no shutdown
+ R2(config-if)#ip address 10.0.0.2 255.255.255.252
+ R2(config-if)#end
+ R2#ping 10.0.0.1
+ Type escape sequence to abort.
+ Sending 5, 100-byte ICMP Echos to 10.0.0.1, timeout is 2 seconds:
+ !!!!!
+ Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
+
+ R1#ping 10.0.0.2
+ Type escape sequence to abort.
+ Sending 5, 100-byte ICMP Echos to 10.0.0.1, timeout is 2 seconds:
+ !!!!!
+ Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
+ ```
+ - c. Настройка маршрутов на сети обоих коммутаторов.
+ ```
+
+  R2(config)#ip route 192.168.10.0 255.255.255.0 10.0.0.1
+  R2(config)#ip route 192.168.11.0 255.255.255.0 10.0.0.1
+  R2(config)#exit
+
+  R1(config)#ip route 192.168.1.0 255.255.255.0 10.0.0.2
+  R1(config)#exit
+  R1#ping 192.168.1.1
   Type escape sequence to abort.
-  Sending 5, 100-byte ICMP Echos to 192.168.1.2, timeout is 2 seconds:
+  Sending 5, 100-byte ICMP Echos to 192.168.1.1, timeout is 2 seconds:
   !!!!!
   Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
-  ```
- - b. Проверка пингом с S1 на S3:
- ```
-  S1#ping 192.168.1.3
+
+  R2#ping 192.168.10.1
   Type escape sequence to abort.
-  Sending 5, 100-byte ICMP Echos to 192.168.1.3, timeout is 2 seconds:
+  Sending 5, 100-byte ICMP Echos to 192.168.10.1, timeout is 2 seconds:
+  !!!!!
+  Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
+  R2#ping 192.168.11.1
+  Type escape sequence to abort.
+  Sending 5, 100-byte ICMP Echos to 192.168.11.1, timeout is 2 seconds:
   !!!!!
   Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/5 ms
  ```
- - c. Проверка пингом с S2 на S3:
+#### 1.7 Настройка vlan коммутатора S1.
+ - a. Создать и поименовать вланы согласно таблице.
  ```
-  S2#ping 192.168.1.3
-  Type escape sequence to abort.
-  Sending 5, 100-byte ICMP Echos to 192.168.1.3, timeout is 2 seconds:
-  !!!!!
-  Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
+  S1(config)#vlan 100,200,999,1000
+  S1(config-vlan)#no shutdown
+  %VLAN 100 is not shutdown.
+  %VLAN 200 is not shutdown.
+  %VLAN 999 is not shutdown.
+  %VLAN 1000 is not shutdown.
+  S1(config-vlan)#exit
+  S1(config)#vlan 100
+  S1(config-vlan)#name Clients
+  S1(config-vlan)#exit
+  S1(config)#vlan 200
+  S1(config-vlan)#name Management
+  S1(config-vlan)#exit
+  S1(config)#vlan 999
+  S1(config-vlan)#name Parking_Lot
+  S1(config-vlan)#exit
+  S1(config)#vlan 1000
+  S1(config-vlan)#name Native
+  S1(config-vlan)#exit
  ```
-
-### 2. Определение корневого моста
- - a. Отключить все порты на коммутаторах
+ - b. Сконфигурировать интерфейс управления и маршрут по-умолчанию на S1.
+ ```
+  S1(config)#interface vlan 200
+  S1(config-if)#ip address 192.168.11.2 255.255.255.0
+  S1(config-if)# exit
+  S1(config)#ip default-gateway 192.168.11.1
+ ```
+ - с. Сконфигурировать интерфейс управления и маршрут по-умолчанию на S2.
+ ```
+  S2(config)#interface vlan 1
+  S2(config-if)#no shutdown
+  S2(config-if)#ip address 192.168.1.2 255.255.255.0
+  S2(config-if)#exit
+  S2(config)#ip default-gateway 192.168.1.1
+ ```
+ - d. Назначить неиспользуемым портам на S1 vlan999 и отключить их.
+ ```
+  S1(config)#interface range e0/2-3
+  S1(config-if-range)#switchport mode access
+  S1(config-if-range)#switchport access vlan 999
+  S1(config-if-range)#shutdown
+ ```
+ - e. Назначить используемым портам vlan на S1.
 ```
-S1(config)#interface range Et0/0-3    
-S1(config-if-range)#shutdown
+  S1(config)#interface e0/1
+  S1(config-if)#switchport mode access
+  S1(config-if)#switchport access vlan 100
+  S1(config-if)#no shutdown
 ```
- - b. Настройте подключенные порты в качестве транковых.
+ - f. Настроить trunk-интерфейс на S1.
  ```
- S1(config-if-range)#switchport trunk encapsulation dot1q
- S1(config-if-range)#switchport mode trunk
+S1(config)#interface e0/0
+S1(config-if)#switchport trunk encapsulation dot1q
+S1(config-if)#switchport mode trunk
+S1(config-if)#switchport trunk allowed vlan 100,200,999,1000
+S1(config-if)#switchport trunk native vlan 1000
+S1(config-if)#no shutdown
  ```
- - c. Включите порты e0/1 и e0/3 на всех коммутаторах.
- ```
- S1(config)#interface range ethernet 0/1, ethernet 0/3
- S1(config-if-range)#no shutdown
- ```
- - d. Отобразите данные протокола spanning-tree.
-
- ```
- S1#show spanning-tree
-
-   Bridge ID  Priority    32769  (priority 32768 sys-id-ext 1)
-              Address     aabb.cc00.1000
-
- S2#show spanning-tree
-
-  Bridge ID  Priority    32769  (priority 32768 sys-id-ext 1)
-             Address     aabb.cc00.2000
-
- S3#show spanning-tree
-
-  Bridge ID  Priority    32769  (priority 32768 sys-id-ext 1)
-             Address     aabb.cc00.3000
-
- ```
-
- - e. Схема с ролями портов.
- ![](img/lab02_1.png)
-
- - f. Вопросы по схеме.
-    - Какой коммутатор является корневым мостом: S1.
-    - Почему этот коммутатор был выбран протоколом spanning-tree в качестве корневого моста:
-    При определении корневого коммутатора вычисляется Bridge ID, состоящий из: приоритета коммутатора, номера VLAN и значения MAC-адреса устройства. Первые два параметра у коммутаторов одинаковые, но у S1 наименьший MAC. В связи с чем он и был выбран.
-    - Какие порты на коммутаторе являются корневыми портами: S2/e0/1 и S3/e0/3.
-    - Какие порты на коммутаторе являются назначенными портами: S1/e0/1, S1/e0/3, S2/e0/3.
-    - Какой порт отображается в качестве альтернативного и в настоящее время заблокирован: S3/e0/1
-    - Почему протокол spanning-tree выбрал этот порт в качестве невыделенного (заблокированного) порта?
-    Когда S2 и S3 решали, который из портов, ноторыми они соединяются, будет Desig, а кто Altn, был проверен Root Path Cost обоих коммутаторов. Он оказался равен. Тогда выбор сделать порт назначенным пал на S2 из-за меньшего BID коммутатора, в связи с меньшим значением MAC-адреса. Оставшийся порт на S3 был заблокирован.
-
-### 3. Наблюдение за процессом выбора протоколом STP порта, исходя из стоимости портов.
- - Определите коммутатор с заблокированным портом.
- Заблокирован порт S3/e0/1.
- ```
-Interface           Role Sts Cost      Prio.Nbr Type
-------------------- ---- --- --------- -------- --------------------------------
-Et0/1               Altn BLK 100       128.2    Shr
-Et0/3               Root FWD 100       128.4    Shr
- ```
- - Измените стоимость порта.
+### 2 Конфигурирование сервера DHCPv4 на R1.
+#### 2.1 Настройка DHCPv4 для сети Clients.
+ - a. Исключить пять первых адресов.
 ```
-S3(config)#interface e0/3
-S3(config-if)#spanning-tree cost 18
+R1(config)#ip dhcp excluded-address 192.168.10.1 192.168.10.5
 ```
- - Просмотрите изменения протокола spanning-tree.
+ - b. Создать dhcp-пул с уникальным именем.
+ ```
+ R1(config)#ip dhcp pool pool_clients
+ ```
+ - c. Задать сеть.
+ ```
+ R1(dhcp-config)#network 192.168.10.0 255.255.255.0
+ ```
+ - d. Задать доменное имя.
+ ```
+ R1(dhcp-config)#domain-name clients.com
+ ```
+ - e. Задать маршрут по-умолчанию.
+ ```
+ R1(dhcp-config)#default-router 192.168.10.1
+ ```
+ - f. Установить время аденды 2 дня 12 часов и 30 минут.
+ ```
+ R1(dhcp-config)#lease 2 12 30
+ ```
+#### 2.1 Проверить конфигурацию DHCPv4 сети Clients.
+ - a. Проверить настройки на роутере.
 ```
-Interface           Role Sts Cost      Prio.Nbr Type
-------------------- ---- --- --------- -------- --------------------------------
-Et0/1               Desg LIS 100       128.2    Shr
-Et0/3               Root FWD 18        128.4    Shr
+R1#show ip dhcp pool
+
+Pool pool_clients :
+ Utilization mark (high/low)    : 100 / 0
+ Subnet size (first/next)       : 0 / 0
+ Total addresses                : 254
+ Leased addresses               : 1
+ Pending event                  : none
+ 1 subnet is currently in the pool :
+ Current index        IP address range                    Leased addresses
+ 192.168.10.7         192.168.10.1     - 192.168.10.254    1
+
+ R1#show ip dhcp binding
+ Bindings from all pools not associated with VRF:
+ IP address          Client-ID/	 	    Lease expiration        Type
+ 		    Hardware address/
+ 		    User name
+ 192.168.10.6        0050.0000.0500          Sep 27 2023 07:13 AM    Automatic
+
+ R1#show ip dhcp server statistics
+Memory usage         48711
+Address pools        1
+Database agents      0
+Automatic bindings   1
+Manual bindings      0
+Expired bindings     0
+Malformed messages   0
+Secure arp entries   0
+
+Message              Received
+BOOTREQUEST          0
+DHCPDISCOVER         7
+DHCPREQUEST          3
+DHCPDECLINE          0
+DHCPRELEASE          2
+DHCPINFORM           0
+
+Message              Sent
+BOOTREPLY            0
+DHCPOFFER            3
+DHCPACK              3
+DHCPNAK              0
+
 ```
-- Почему протокол spanning-tree заменяет ранее заблокированный порт на назначенный порт и блокирует порт, который был назначенным портом на другом коммутаторе?
-  Изменилась Root Path Cost для S3, который теперь стал лучше по первому критерию и сделал свой порт назначенным.
+ - b. Проверить адрес PC1.
+ ```
+ root@PC1:~# ip addr
+...
+2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 00:50:00:00:05:00 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.10.6/24 brd 192.168.10.255 scope global ens3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::250:ff:fe00:500/64 scope link
+       valid_lft forever preferred_lft forever
+ root@PC1:~# ip route
+default via 192.168.10.1 dev ens3
+192.168.10.0/24 dev ens3  proto kernel  scope link  src 192.168.10.6
+ ```
+#### 2.3 Настроить DHCPv4 пул для сети коммутатора 2.
+ - a. По аналогии с первым пулом.
+ ```
+  R1(config)#ip dhcp excluded-address 192.168.1.1 192.168.1.5  
+  R1(config)#ip dhcp pool pool_others
+  R1(dhcp-config)#network 192.168.1.0 255.255.255.0
+  R1(dhcp-config)#domain-name others.com
+  R1(dhcp-config)#default-router 192.168.1.1
+  R1(dhcp-config)#lease 2 12 30
+ ```
+ - b. Настройка dhcp-relay на R2.
+ ```
+ R2(config)#interface e0/1
+ R2(config-if)#ip helper-address 10.0.0.1
+ ```
+ - c. Проверка работы DHCPv4 на R2.
+ ```
+ R1#show ip dhcp binding
+Bindings from all pools not associated with VRF:
+IP address          Client-ID/	 	    Lease expiration        Type
+		    Hardware address/
+		    User name
+192.168.1.6         0050.0000.0600          Sep 27 2023 07:32 AM    Automatic
+192.168.10.6        0050.0000.0500          Sep 27 2023 07:13 AM    Automatic
 
- - Удалите изменения стоимости порта.
- ```
- S3(config)#interface e0/3
- S3(config-if)#no spanning-tree cost 18
+root@PC2:~# ip addr
+...
+2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 00:50:00:00:06:00 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.6/24 brd 192.168.1.255 scope global ens3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::250:ff:fe00:600/64 scope link
+       valid_lft forever preferred_lft forever
 
- Interface           Role Sts Cost      Prio.Nbr Type
-------------------- ---- --- --------- -------- --------------------------------
-Et0/1               Altn BLK 100       128.2    Shr
-Et0/3               Root FWD 100       128.4    Shr
  ```
-### 4. Наблюдение за процессом выбора протоколом STP порта, исходя из приоритета портов.
- - Включение портов e0/0 и e0/2 на всех коммутаторах.
- ```
- S1(config)#interface range ethernet 0/0, ethernet 0/2
- S1(config-if-range)#no shutdown
- ```
- - Какой порт выбран протоколом STP в качестве порта корневого моста на каждом коммутаторе некорневого моста?
-  Корневыми выбраны порты: S2/e0/0 и S3/e0/2.
- - Почему протокол STP выбрал эти порты в качестве портов корневого моста на этих коммутаторах?
-  При равенстве Root Path cost и BID, как в данном случае, выбирается порт на коммутаторе в сторону рута, который имеет наименьший номер (или Prio.Nbr).
-
-### Вопросы для повторения.
- - 1. Какое значение протокол STP использует первым после выбора корневого моста, чтобы определить выбор корневого порта?
-  Root Path Cost.
- - 2. Если первое значение на двух портах одинаково, какое следующее значение будет использовать протокол STP при выборе порта?
-  BID соседнего коммутатора за этим портом.
- - 3. Если оба значения на двух портах равны, каким будет следующее значение, которое использует протокол STP при выборе порта?
-  Номер порта на соседним коммутаторе за этим портом.
