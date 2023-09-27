@@ -2,8 +2,8 @@
 
 ###  Задание:
  1. Создание сети и настройка основных параметров устройств.
- 2. Конфигурирование и проверка двух DHCPv4 серверов на R1.
- 3. Конфигурирование и проверка DHCPv4 сервера на R2.
+ 2. Настройка DHCPv4.
+ 3. Настройка DHCPv6.
 
 
 ### 1 Создание сети и настройка основных параметров устройств.
@@ -279,7 +279,7 @@ S1(config-if)#switchport trunk allowed vlan 100,200,999,1000
 S1(config-if)#switchport trunk native vlan 1000
 S1(config-if)#no shutdown
  ```
-### 2 Конфигурирование сервера DHCPv4 на R1.
+### 2 Настройка DHCPv4.
 #### 2.1 Настройка DHCPv4 для сети Clients.
  - a. Исключить пять первых адресов.
 ```
@@ -401,3 +401,77 @@ root@PC2:~# ip addr
        valid_lft forever preferred_lft forever
 
  ```
+### 3. Настройка DHCPv6.
+#### 3.1 Таблица адресации.
+
+| Device        | Interface     | IPv6 address           |
+| ------------- | ------------- | ---------------------- |
+| R1            | e0/0          | 2001:db8:acad:2::1/64  |
+|               |               | fe80::1                |
+|               | e0/1.100      | 2001:db8:acad:1::1/64  |
+|               |               | fe80::1                |
+| R2            | e0/0          | 2001:db8:acad:2::2/64  |
+|               |               | fe80::2                |
+|               | e0/1          | 2001:db8:acad:3::1/64  |
+|               |               | fe80::1                |
+| PC1           | e0            | DHCP                   |
+| PC2           | e0            | DHCP                   |
+
+#### 3.2 Топология сети.
+
+Топология сети та же, что для v4.
+
+#### 3.3 Настройка интерфейсов и маршрутизации на обоих роутерах.
+ - a. Настройка адресов интерфейсов в соответствии с таблицей адресации.
+ ```
+ R1(config)#interface e0/0
+ R1(config-if)#ipv6 address fe80::1 link-local
+ R1(config-if)#ipv6 address 2001:db8:acad:2::1/64
+ R1(config-if)#exit
+ R1(config)#interface e0/1.100
+ R1(config-subif)#ipv6 address fe80::1 link-local
+ R1(config-subif)#ipv6 address 2001:db8:acad:1::1/64
+ ```
+ - b. На R2 настройка аналогична.
+
+ - с. Включение маршрутизации.
+ ```
+ R1(config)#ipv6 unicast-routing
+ R2(config)#ipv6 unicast-routing
+ ```
+ - d. Настроить маршрутами по умолчанию на обоих роутерах адреса интерфейсов e0/0 на соседе.
+ ```
+  R1(config)#ipv6 route ::/0 2001:db8:acad:2::2
+  R2(config)#ipv6 route ::/0 2001:db8:acad:2::1
+ ```
+ - e. Проверка пингом адреса интерфейса e0/1 соседнего роутера.
+ ```
+ R1#ping 2001:db8:acad:3::1
+ Type escape sequence to abort.
+ Sending 5, 100-byte ICMP Echos to 2001:DB8:ACAD:3::1, timeout is 2 seconds:
+ !!!!!
+ Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
+
+ R2#ping 2001:db8:acad:1::1
+ Type escape sequence to abort.
+ Sending 5, 100-byte ICMP Echos to 2001:DB8:ACAD:1::1, timeout is 2 seconds:
+ !!!!!
+ Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
+ ```
+
+ - f. Проверка SLAAC на PC1.
+ ```
+ root@PC1:~# ip addr
+ ...
+ 2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+     link/ether 00:50:00:00:05:00 brd ff:ff:ff:ff:ff:ff
+     inet 192.168.10.6/24 brd 192.168.10.255 scope global ens3
+        valid_lft forever preferred_lft forever
+     inet6 2001:db8:acad:1:250:ff:fe00:500/64 scope global mngtmpaddr dynamic
+        valid_lft 2591999sec preferred_lft 604799sec
+     inet6 fe80::250:ff:fe00:500/64 scope link
+        valid_lft forever preferred_lft forever
+
+ ```
+
+ #### 3.4
