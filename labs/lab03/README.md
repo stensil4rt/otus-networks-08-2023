@@ -428,7 +428,7 @@ root@PC2:~# ip addr
  R1(config-if)#ipv6 address fe80::1 link-local
  R1(config-if)#ipv6 address 2001:db8:acad:2::1/64
  R1(config-if)#exit
- R1(config)#interface e0/1.100
+ R1(config)#interface e0/1.200
  R1(config-subif)#ipv6 address fe80::1 link-local
  R1(config-subif)#ipv6 address 2001:db8:acad:1::1/64
  ```
@@ -459,19 +459,92 @@ root@PC2:~# ip addr
  Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/1 ms
  ```
 
- - f. Проверка SLAAC на PC1.
+ - f. Настройка SLAAC на S1.
  ```
- root@PC1:~# ip addr
- ...
- 2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
-     link/ether 00:50:00:00:05:00 brd ff:ff:ff:ff:ff:ff
-     inet 192.168.10.6/24 brd 192.168.10.255 scope global ens3
-        valid_lft forever preferred_lft forever
-     inet6 2001:db8:acad:1:250:ff:fe00:500/64 scope global mngtmpaddr dynamic
-        valid_lft 2591999sec preferred_lft 604799sec
-     inet6 fe80::250:ff:fe00:500/64 scope link
-        valid_lft forever preferred_lft forever
-
+ S1(config)#interface vlan 200
+ S1(config-if)#ipv6 enable
+ S1(config-if)#ipv6 address autoconfig
+ S1(config-if)#do show ipv6 interface brief
+...
+ Vlan200                [up/up]
+    FE80::A8BB:CCFF:FE80:1000
+    2001:DB8:ACAD:1:A8BB:CCFF:FE80:1000
  ```
 
- #### 3.4
+#### 3.4 Настройка и проверка DHCPv6 на R1.
+##### 3.4.1 Настройка stateless DHCPv6 на R1.
+ - a. Настроить R1 как stateless DHCPv6 сервер.
+ ```
+ R1(config)#ipv6 dhcp pool R1-STATELESS
+ R1(config-dhcpv6)# address prefix 2001:db8:acad:3:aaa::/80
+ R1(config-dhcpv6)#dns-server 2001:db8:acad::254
+ R1(config-dhcpv6)#domain-name STATELESS.com
+ R1(config-dhcpv6)#exit
+ R1(config)#interface e0/1.200
+ R1(config-subif)#ipv6 nd other-config-flag
+ R1(config-subif)#ipv6 dhcp server R1-STATELESS
+ ```
+ - b. Проверка интерфейса S1.
+ ```
+ S1#show ipv6 dhcp interface   
+ Vlan200 is in client mode
+   Prefix State is IDLE (0)
+   Information refresh timer expires in 23:58:52
+   Address State is SOLICIT (10)
+   Retransmission timer expires in 00:00:41
+   List of known servers:
+     Reachable via address: FE80::1
+     DUID: 00030001AABBCC003000
+     Preference: 0
+     Configuration parameters:
+       DNS server: 2001:DB8:ACAD::254
+       Domain name: STATELESS.com
+       Information refresh time: 0
+   Prefix Rapid-Commit: disabled
+   Address Rapid-Commit: disabled
+
+ ```
+##### 3.4.2 Настройка stateful DHCPv6 на R1 для ретрансляции с R2.
+ - a. Настройка R1 .
+ ```
+ R1(config)#ipv6 dhcp pool R2-STATEFUL
+ R1(config-dhcpv6)#address prefix 2001:db8:acad:3:aaa::/80
+ R1(config-dhcpv6)#dns-server 2001:db8:acad::254
+ R1(config-dhcpv6)#domain-name STATEFUL.com
+ R1(config-dhcpv6)#exit
+ R1(config)#interface e0/0
+ R1(config-if)#ipv6 dhcp server R2-STATEFUL
+ ```
+ - b. Настройка ретрансляции dhcpv6 на R2.
+ ```
+ R2(config)#interface e0/1
+ R2(config-if)#ipv6 nd managed-config-flag
+ R2(config-if)#ipv6 dhcp relay destination 2001:db8:acad:2::1 e0/0
+ ```
+ - c. Настройка S2 на получение DHCPv6.
+ ```
+ S2(config)#interface vlan1
+ S2(config-if)#ipv6 enable
+ S2(config-if)#ipv6 address dhcp
+
+ S2#show ipv6 dhcp interface
+Vlan1 is in client mode
+  Prefix State is IDLE
+  Address State is OPEN
+  Renew for address will be sent in 11:59:56
+  List of known servers:
+    Reachable via address: FE80::1
+    DUID: 00030001AABBCC003000
+    Preference: 0
+    Configuration parameters:
+      IA NA: IA ID 0x00070001, T1 43200, T2 69120
+        Address: 2001:DB8:ACAD:3:AAA:239B:6273:1087/128
+                preferred lifetime 86400, valid lifetime 172800
+                expires at Sep 17 2023 03:49 PM (172797 seconds)
+      DNS server: 2001:DB8:ACAD::254
+      Domain name: STATEFUL.com
+      Information refresh time: 0
+  Prefix Rapid-Commit: disabled
+  Address Rapid-Commit: disabled
+
+ ```
