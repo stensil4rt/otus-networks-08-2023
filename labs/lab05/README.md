@@ -217,7 +217,31 @@ SW4(config)#spanning-tree vlan 10,20,40 root primary
 SW5(config)#spanning-tree vlan 10,20,40 root secondary
  ```
 
- - На R12, R13, R16, R17 настраивается HSRP.
+- На R12, R13 настраивается VRRP.
+```
+R12(config)#interface vlan 10
+R12(config-if)#vrrp 1 ip 192.168.100.1
+R12(config-if)#exit
+R12(config)#interface vlan 20
+R12(config-if)#vrrp 2 ip 192.168.100.129
+R12(config-if)#exit
+R12(config)#interface vlan 40
+R12(config-if)#vrrp 3 ip 172.16.100.1
+R12(config-if)#exit
+R12(config)#do show vrrp brief
+Interface          Grp Pri Time  Own Pre State   Master addr     Group addr
+Vl10               1   100 3609       Y  Backup  192.168.100.3   192.168.100.1  
+Vl20               2   100 3609       Y  Backup  192.168.100.131 192.168.100.129
+Vl40               3   100 3609       Y  Backup  172.16.100.3    172.16.100.1
+
+R13(config)#do show vrrp brief
+Interface          Grp Pri Time  Own Pre State   Master addr     Group addr
+Vl10               1   100 3609       Y  Master  192.168.100.3   192.168.100.1  
+Vl20               2   100 3609       Y  Master  192.168.100.131 192.168.100.129
+Vl40               3   100 3609       Y  Master  172.16.100.3    172.16.100.1 
+```
+
+ - На R16, R17 настраивается HSRP.
  ```
  R12(config-if)#interface vlan10
  R12(config-if)#standby version 2
